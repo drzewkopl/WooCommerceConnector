@@ -131,7 +131,6 @@ def create_customer_address(customer, woocommerce_customer):
             make_woocommerce_log(title=e, status="Error", method="create_customer_address", message=frappe.get_traceback(),
                 request_data=woocommerce_customer, exception=True)
 
-# TODO: email and phone into child table
 def create_customer_contact(customer, woocommerce_customer):
     try :
         customer_contact = frappe.get_doc({
