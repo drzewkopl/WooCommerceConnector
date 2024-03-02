@@ -34,7 +34,7 @@ def sync_woocommerce_orders():
                         make_woocommerce_log(status="Error", method="sync_woocommerce_orders", message=frappe.get_traceback(),
                             request_data=woocommerce_order, exception=True)
                     except Exception as e:
-                        if e.args and e.args[0] and e.args[0].decode("utf-8").startswith("402"):
+                        if e.args or e.args[0] and e.args[0].decode("utf-8").startswith("402"):
                             raise e
                         else:
                             make_woocommerce_log(title=e.message, status="Error", method="sync_woocommerce_orders", message=frappe.get_traceback(),
@@ -53,8 +53,8 @@ def valid_customer_and_product(woocommerce_order):
     if woocommerce_order.get("status").lower() == "cancelled":
         return False
     warehouse = frappe.get_doc("WooCommerce Config", "WooCommerce Config").warehouse
-	
-	# old function item based on sku
+    
+    # old function item based on sku
     # for item in woocommerce_order.get("line_items"):
         # if item.get("sku"):
             # if not frappe.db.get_value("Item", {"barcode": item.get("sku")}, "item_code"):
@@ -65,8 +65,8 @@ def valid_customer_and_product(woocommerce_order):
             # make_woocommerce_log(title="Item barcode missing in WooCommerce!", status="Error", method="valid_customer_and_product", message="Item barcode is missing in WooCommerce! The Order {0} will not be imported! For details of order see below".format(woocommerce_order.get("id")),
                 # request_data=woocommerce_order, exception=True)
             # return False
-			
-	# new function item based on product id
+            
+    # new function item based on product id
     for item in woocommerce_order.get("line_items"):
         if item.get("product_id"):
             if not frappe.db.get_value("Item", {"woocommerce_product_id": item.get("product_id")}, "item_code"):
@@ -187,6 +187,10 @@ def create_sales_order(woocommerce_order, woocommerce_settings, company=None):
         shipping_address = get_customer_address_from_order('Shipping', woocommerce_order, customer)
         billing_address = get_customer_address_from_order('Billing', woocommerce_order, customer)
 
+        # add X Days to delivery date
+        #current_date = datetime.date.fromisoformat('2019-12-04')
+        #delivery_date = current_date + datetime.timedelta(days=7)
+
         # get applicable tax rule from configuration
         tax_rules = frappe.get_all("WooCommerce Tax Rule", filters={'currency': woocommerce_order.get("currency")}, fields=['tax_rule'])
         if not tax_rules:
@@ -196,6 +200,7 @@ def create_sales_order(woocommerce_order, woocommerce_settings, company=None):
             tax_rules = tax_rules[0]['tax_rule']
         else:
             tax_rules = ""
+
         so = frappe.get_doc({
             "doctype": "Sales Order",
             "naming_series": woocommerce_settings.sales_order_series or "SO-woocommerce-",
@@ -203,6 +208,7 @@ def create_sales_order(woocommerce_order, woocommerce_settings, company=None):
             "woocommerce_payment_method": woocommerce_order.get("payment_method_title"),
             "customer": customer,
             "customer_group": woocommerce_settings.customer_group,  # hard code group, as this was missing since v12
+            #"delivery_date": delivery_date,
             "delivery_date": nowdate(),
             "company": woocommerce_settings.company,
             "selling_price_list": woocommerce_settings.price_list,
@@ -216,7 +222,7 @@ def create_sales_order(woocommerce_order, woocommerce_settings, company=None):
             "taxes_and_charges": tax_rules,
             "customer_address": billing_address,
             "shipping_address_name": shipping_address,
-            "transaction_date": woocommerce_order.get("date_created")[:10]          # pull posting date from WooCommerce
+            "transaction_date": woocommerce_order.get("date_created")[:10]          # pull posting date from WooCommerce // payment terms must be newer date
         })
 
         so.flags.ignore_mandatory = True
@@ -388,12 +394,12 @@ def update_taxes_with_fee_lines(taxes, fee_lines, woocommerce_settings):
             "tax_amount": fee_charge["amount"],
             "cost_center": woocommerce_settings.cost_center
         })
+    
 
     return taxes
 
 def update_taxes_with_shipping_lines(taxes, shipping_lines, woocommerce_settings):
     for shipping_charge in shipping_lines:
-        #
         taxes.append({
             "charge_type": "Actual",
             "account_head": get_shipping_account_head(shipping_charge),
@@ -404,24 +410,22 @@ def update_taxes_with_shipping_lines(taxes, shipping_lines, woocommerce_settings
 
     return taxes
 
-
-
 def get_shipping_account_head(shipping):
-        shipping_title = shipping.get("method_title").encode("utf-8")
+    shipping_title = shipping.get("name") or shipping.get("method_title")
 
-        shipping_account =  frappe.db.get_value("woocommerce Tax Account", \
-                {"parent": "WooCommerce Config", "woocommerce_tax": shipping_title}, "tax_account")
+    shipping_account =  frappe.db.get_value("woocommerce Tax Account",
+            {"parent": "WooCommerce Config", "woocommerce_tax": shipping_title}, "tax_account")
 
-        if not shipping_account:
-                frappe.throw("Tax Account not specified for woocommerce shipping method  {0}".format(shipping.get("method_title")))
+    if not shipping_account:
+            frappe.throw("Tax Account not specified for woocommerce shipping method  {0}".format(shipping.get("method_title")))
 
-        return shipping_account
+    return shipping_account
 
 
 def get_tax_account_head(tax):
-    tax_title = tax.get("name").encode("utf-8") or tax.get("method_title").encode("utf-8")
+    tax_title = tax.get("name") or tax.get("method_title")
 
-    tax_account =  frappe.db.get_value("woocommerce Tax Account", \
+    tax_account =  frappe.db.get_value("woocommerce Tax Account",
         {"parent": "WooCommerce Config", "woocommerce_tax": tax_title}, "tax_account")
 
     if not tax_account:
