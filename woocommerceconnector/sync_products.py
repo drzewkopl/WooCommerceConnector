@@ -372,9 +372,7 @@ def add_to_price_list(item, name):
 def get_item_image(woocommerce_item):
     if woocommerce_item.get("images"):
         for image in woocommerce_item.get("images"):
-            if image.get("position") == 0: # the featured image
-                return image
-            return None
+                return image.get('src')
     else:
         return None
 
@@ -762,20 +760,20 @@ def update_item_stock(item_code, woocommerce_settings, bin=None, force=False):
                     _bin = get_bin(item_code, warehouse.warehouse)
                     qty += (_bin.actual_qty - _bin.reserved_qty)
 
-				# bugfix #1582: variant control from WooCommerce, not ERPNext
-				#if item.woocommerce_variant_id and int(item.woocommerce_variant_id) > 0:
-					#item_data, resource = get_product_update_dict_and_resource(item.woocommerce_product_id, item.woocommerce_variant_id, is_variant=True, actual_qty=qty)
-				#else:
-					#item_data, resource = get_product_update_dict_and_resource(item.woocommerce_product_id, item.woocommerce_variant_id, actual_qty=qty)
+                # bugfix #1582: variant control from WooCommerce, not ERPNext
+                #if item.woocommerce_variant_id and int(item.woocommerce_variant_id) > 0:
+                    #item_data, resource = get_product_update_dict_and_resource(item.woocommerce_product_id, item.woocommerce_variant_id, is_variant=True, actual_qty=qty)
+                #else:
+                    #item_data, resource = get_product_update_dict_and_resource(item.woocommerce_product_id, item.woocommerce_variant_id, actual_qty=qty)
                 if item.woocommerce_product_id and item.variant_of:
-					# item = variant
+                    # item = variant
                     template_item = frappe.get_doc("Item", item.variant_of).woocommerce_product_id
                     item_data, resource = get_product_update_dict_and_resource(template_item, woocommerce_variant_id=item.woocommerce_product_id, is_variant=True, actual_qty=qty)
                 else:
-					# item = single
+                    # item = single
                     item_data, resource = get_product_update_dict_and_resource(item.woocommerce_product_id, actual_qty=qty)
                 try:
-					#make_woocommerce_log(title="Update stock of {0}".format(item.barcode), status="Started", method="update_item_stock", message="Resource: {0}, data: {1}".format(resource, item_data))
+                    #make_woocommerce_log(title="Update stock of {0}".format(item.barcode), status="Started", method="update_item_stock", message="Resource: {0}, data: {1}".format(resource, item_data))
                     put_request(resource, item_data)
                 except requests.exceptions.HTTPError as e:
                     if e.args[0] and e.args[0].startswith("404"):
